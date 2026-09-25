@@ -34,7 +34,10 @@ public class FormsController : ControllerBase
             DueDate = request.DueDate,
             Priority = request.Priority,
             Critical = request.Critical,
-            CreatedBy = request.CreatedBy
+            CreatedBy = request.CreatedBy,
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = false,
+            DeletedAt = null
         };
 
         // Store in repository
@@ -79,17 +82,31 @@ public class FormsController : ControllerBase
     {
         // Validation handled via DataAnnotations on UpdateFormRequest
 
-        // Call Update on repository with ID and updated data
-        //TODO: handle null subject issue
-        var formData = await _repository.UpdateAsync(id, new FormData
+        // retrieve existing form data from repository
+        var existing = await _repository.GetByIdAsync(id);
+        if (existing == null || existing.IsDeleted) // soft deleted records can't be updated
         {
-            Id = request.Id,
-            Subject = request.Subject,
-            Description = request.Description,
-            DueDate = request.DueDate,
-            Priority = request.Priority,
-            Critical = request.Critical
-        });
+            return NotFound();
+        }
+
+        // Merge existing data with new data from request
+        var updatedFormData = new FormData
+        {
+            Id = id,
+            Subject = request.Subject ?? existing.Subject,
+            Description = request.Description ?? existing.Description,
+            DueDate = request.DueDate ?? existing.DueDate,
+            Priority = request.Priority ?? existing.Priority,
+            Critical = request.Critical ?? existing.Critical,
+            CreatedBy = existing.CreatedBy,
+            CreatedAt = existing.CreatedAt,
+            UpdatedAt = DateTime.UtcNow,
+            IsDeleted = existing.IsDeleted,
+            DeletedAt = existing.DeletedAt
+        };
+
+        // Call Update on repository with ID and updated data
+        var formData = await _repository.UpdateAsync(id, updatedFormData);
 
         // If form not found, return 404 Not Found
         if (formData == null)

@@ -7,9 +7,6 @@ namespace FormsApi.Contracts;
 // Should be a subset of the FormData object
 public record UpdateFormRequest
 (
-    [Required]
-    Guid Id,
-
     [StringLength(200, MinimumLength = 1)]
     string? Subject,
 

@@ -9,6 +9,6 @@ public sealed class FutureDateAttribute : ValidationAttribute
     public override bool IsValid(object? value)
     {
         return value is null ||
-               value is DateTimeOffset date && date > DateTimeOffset.UtcNow;
+               value is DateTime date && date > DateTime.UtcNow;
     }
 }

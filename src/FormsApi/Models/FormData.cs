@@ -2,32 +2,34 @@ namespace FormsApi.Models;
 
 public class FormData
 {
-    // Set by FormsApi
+    // Set internally
     public Guid Id { get; set; }
 
-    // Set by CreateFormRequest
-    public string Subject { get; set; }
+    public required string Subject { get; set; }
 
-    // Set by CreateFormRequest
     public string? Description { get; set; }
 
-    // Set by CreateFormRequest
     public DateTime? DueDate { get; set; }
 
-    // Set by CreateFormRequest
     public int? Priority { get; set; }
 
-    // Set by CreateFormRequest
     public bool? Critical { get; set; }
 
-    // Set by FormsApi
+    // Set internally
     public DateTime CreatedAt { get; set; }
 
-    // Set by FormsApi
+    // Set internally
     public DateTime? UpdatedAt { get; set; }
 
-    // Set by CreateFormRequest
     // Assuming this is set via an auth service and delivered when 
     // creating a form rather than something FormsApi would set itself.
-    public string CreatedBy { get; set; }
+    public required string CreatedBy { get; set; }
+
+    // Added to handle soft deletes
+    // Set internally
+    public bool IsDeleted { get; set; }
+
+    // Added to handle soft deletes
+    // Set internally
+    public DateTime? DeletedAt { get; set; }
 }
