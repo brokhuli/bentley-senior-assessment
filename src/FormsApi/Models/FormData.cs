@@ -15,7 +15,6 @@ public class FormData
     public DateTime? DueDate { get; set; }
 
     // Set by CreateFormRequest
-    // Must be between 1 and 10
     public int? Priority { get; set; }
 
     // Set by CreateFormRequest

@@ -1,3 +1,5 @@
+using FormsApi.Repositories;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -6,6 +8,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// Register local form data repository
+builder.Services.AddSingleton<IFormDataRepository, LocalFormDataRepository>();
 
 var app = builder.Build();
 
