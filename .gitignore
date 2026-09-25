@@ -1,0 +1,66 @@
+## .NET / Visual Studio / Rider
+
+# Build results
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Dd]ebug/
+[Rr]elease/
+[Xx]64/
+[Xx]86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Visual Studio cache/options
+.vs/
+
+# VS Code
+.vscode/
+
+# Rider / JetBrains
+.idea/
+*.DotSettings.user
+
+# Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+# Build/publish output
+*.pdb
+*.dll.config
+PublishProfiles/
+*.pubxml
+*.pubxml.user
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Environment / secrets
+*.env
+appsettings.*.local.json
+secrets.json
+
+# Temporary files
+Temp/
