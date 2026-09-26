@@ -3,13 +3,14 @@ using FormsApi.Validation;
 
 namespace FormsApi.Contracts;
 
-// This record represents the request for creating a new form data entry.
+// This record represents the request for patching an existing form data entry.
 // Should be a subset of the FormData object
-public record CreateFormRequest
+public record PatchFormRequest
 (
-    [Required]
+    // nullable properties allow for partial updates, where only the 
+    // provided fields will be updated.
     [StringLength(200, MinimumLength = 1)]
-    string Subject,
+    string? Subject, 
 
     [StringLength(5000)]
     string? Description,
@@ -20,9 +21,5 @@ public record CreateFormRequest
     [Range(1, 10)]
     int? Priority,
 
-    bool? Critical,
-
-    [Required]
-    [StringLength(100, MinimumLength = 1)]
-    string CreatedBy
+    bool? Critical
 );

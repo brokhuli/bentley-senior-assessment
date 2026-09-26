@@ -52,6 +52,55 @@ public class FormsControllerTests
     }
 
     [Fact]
+    public async Task Test_Create_SanitizesInput()
+    {
+        var request = new CreateFormRequest
+        (
+            "  Test Subject  ",
+            "Line1\r\nLine2\rLine3",
+            DateTime.UtcNow.AddDays(1),
+            5,
+            false,
+            "  TestUser  "
+        );
+
+        var result = await _controller.Create(request);
+
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
+        var formData = Assert.IsType<FormData>(createdResult.Value);
+
+        Assert.Equal("Test Subject", formData.Subject);
+        Assert.Equal("Line1\nLine2\nLine3", formData.Description);
+        Assert.Equal("TestUser", formData.CreatedBy);
+    }
+
+    [Fact]
+    public async Task Test_Create_ReturnsInstance_WhenOptionalFieldsAreNull()
+    {
+        var request = new CreateFormRequest
+        (
+            "Test Subject",
+            null,
+            null,
+            null,
+            null,
+            "TestUser"
+        );
+
+        var result = await _controller.Create(request);
+
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
+        var formData = Assert.IsType<FormData>(createdResult.Value);
+
+        Assert.Null(formData.Description);
+        Assert.Null(formData.DueDate);
+        Assert.Null(formData.Priority);
+        Assert.Null(formData.Critical);
+        Assert.False(formData.IsDeleted);
+        Assert.Null(formData.DeletedAt);
+    }
+
+    [Fact]
     public async Task Test_GetById_ReturnsOk_WhenFormExists()
     {
         var id = Guid.NewGuid();
@@ -96,6 +145,44 @@ public class FormsControllerTests
 
         var okResult = Assert.IsType<OkObjectResult>(result);
         Assert.NotNull(okResult.Value);
+    }
+
+    [Fact]
+    public async Task Test_List_PassesQueryParametersToRepository()
+    {
+        var query = new FormListQuery(Page: 2, PageSize: 10, SubjectFilter: "Test");
+        var items = new List<FormData>
+        {
+            new() { Id = Guid.NewGuid(), Subject = "Test Subject", CreatedBy = "TestUser", CreatedAt = DateTime.UtcNow }
+        };
+
+        _repository.Setup(r => r.ListAsync(2, 10, "Test")).ReturnsAsync((items, items.Count));
+
+        var result = await _controller.List(query);
+
+        Assert.IsType<OkObjectResult>(result);
+        _repository.Verify(r => r.ListAsync(2, 10, "Test"), Times.Once);
+    }
+
+    [Fact]
+    public async Task Test_List_ReturnsOk_WithEmptyResults_WhenNoFormsMatch()
+    {
+        var query = new FormListQuery(Page: 1, PageSize: 20, SubjectFilter: "NoMatch");
+
+        _repository.Setup(r => r.ListAsync(query.Page, query.PageSize, query.SubjectFilter))
+            .ReturnsAsync((new List<FormData>(), 0));
+
+        var result = await _controller.List(query);
+
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        Assert.NotNull(okResult.Value);
+
+        var itemsProperty = okResult.Value!.GetType().GetProperty("Items");
+        var totalCountProperty = okResult.Value!.GetType().GetProperty("TotalCount");
+
+        var itemsValue = Assert.IsType<IEnumerable<FormData>>(itemsProperty!.GetValue(okResult.Value), exactMatch: false);
+        Assert.Empty(itemsValue);
+        Assert.Equal(0, totalCountProperty!.GetValue(okResult.Value));
     }
 
     [Fact]
@@ -161,6 +248,102 @@ public class FormsControllerTests
     }
 
     [Fact]
+    public async Task Test_Patch_ReturnsOk_WhenFormExistsAndNotDeleted()
+    {
+        var id = Guid.NewGuid();
+        var existing = new FormData
+        {
+            Id = id,
+            Subject = "Original Subject",
+            CreatedBy = "TestUser",
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = false
+        };
+        var request = new PatchFormRequest("Patched Subject", null, null, null, null);
+        var patched = new FormData
+        {
+            Id = id,
+            Subject = "Patched Subject",
+            CreatedBy = "TestUser",
+            CreatedAt = existing.CreatedAt
+        };
+
+        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
+        _repository.Setup(r => r.UpdateAsync(id, It.IsAny<FormData>())).ReturnsAsync(patched);
+
+        var result = await _controller.Patch(id, request);
+
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        Assert.Same(patched, okResult.Value);
+    }
+
+    [Fact]
+    public async Task Test_Patch_PreservesExistingFields_WhenNotProvidedInRequest()
+    {
+        var id = Guid.NewGuid();
+        var dueDate = DateTime.UtcNow.AddDays(5);
+        var existing = new FormData
+        {
+            Id = id,
+            Subject = "Original Subject",
+            Description = "Original Description",
+            DueDate = dueDate,
+            Priority = 3,
+            Critical = true,
+            CreatedBy = "TestUser",
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = false
+        };
+        var request = new PatchFormRequest(null, null, null, null, null);
+
+        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
+        _repository.Setup(r => r.UpdateAsync(id, It.IsAny<FormData>()))
+            .ReturnsAsync((Guid _, FormData f) => f);
+
+        var result = await _controller.Patch(id, request);
+
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var patched = Assert.IsType<FormData>(okResult.Value);
+        Assert.Equal(existing.Subject, patched.Subject);
+        Assert.Equal(existing.Description, patched.Description);
+        Assert.Equal(existing.DueDate, patched.DueDate);
+        Assert.Equal(existing.Priority, patched.Priority);
+        Assert.Equal(existing.Critical, patched.Critical);
+    }
+
+    [Fact]
+    public async Task Test_Patch_Throws_WhenFormDoesNotExist()
+    {
+        var id = Guid.NewGuid();
+        var request = new PatchFormRequest("Patched Subject", null, null, null, null);
+
+        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((FormData?)null);
+
+        await Assert.ThrowsAsync<FormNotFoundException>(() => _controller.Patch(id, request));
+    }
+
+    [Fact]
+    public async Task Test_Patch_Throws_WhenFormIsSoftDeleted()
+    {
+        var id = Guid.NewGuid();
+        var existing = new FormData
+        {
+            Id = id,
+            Subject = "Original Subject",
+            CreatedBy = "TestUser",
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = true
+        };
+        var request = new PatchFormRequest("Patched Subject", null, null, null, null);
+
+        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
+
+        await Assert.ThrowsAsync<FormConflictException>(() => _controller.Patch(id, request));
+
+        _repository.Verify(r => r.UpdateAsync(It.IsAny<Guid>(), It.IsAny<FormData>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Test_Delete_ReturnsBadRequest_WhenIdIsEmpty()
     {
         var result = await _controller.Delete(Guid.Empty);
@@ -173,6 +356,16 @@ public class FormsControllerTests
     public async Task Test_Delete_ReturnsNoContent_WhenDeleteSucceeds()
     {
         var id = Guid.NewGuid();
+        var existing = new FormData
+        {
+            Id = id,
+            Subject = "Test Subject",
+            CreatedBy = "TestUser",
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = false
+        };
+
+        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
         _repository.Setup(r => r.DeleteAsync(id)).ReturnsAsync(true);
 
         var result = await _controller.Delete(id);
@@ -181,9 +374,51 @@ public class FormsControllerTests
     }
 
     [Fact]
+    public async Task Test_Delete_ReturnsNoContent_WhenAlreadySoftDeleted()
+    {
+        var id = Guid.NewGuid();
+        var existing = new FormData
+        {
+            Id = id,
+            Subject = "Test Subject",
+            CreatedBy = "TestUser",
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = true
+        };
+
+        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
+
+        var result = await _controller.Delete(id);
+
+        Assert.IsType<NoContentResult>(result);
+        _repository.Verify(r => r.DeleteAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Test_Delete_Throws_WhenFormDoesNotExist()
     {
         var id = Guid.NewGuid();
+        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((FormData?)null);
+
+        await Assert.ThrowsAsync<FormNotFoundException>(() => _controller.Delete(id));
+
+        _repository.Verify(r => r.DeleteAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Test_Delete_Throws_WhenDeleteFailsConcurrently()
+    {
+        var id = Guid.NewGuid();
+        var existing = new FormData
+        {
+            Id = id,
+            Subject = "Test Subject",
+            CreatedBy = "TestUser",
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = false
+        };
+
+        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
         _repository.Setup(r => r.DeleteAsync(id)).ReturnsAsync(false);
 
         await Assert.ThrowsAsync<FormNotFoundException>(() => _controller.Delete(id));

@@ -3,12 +3,16 @@ using FormsApi.Validation;
 
 namespace FormsApi.Contracts;
 
-// This record represents the request for updating an existing form data entry.
+// This record represents the request for updating (put) an existing form data entry.
 // Should be a subset of the FormData object
 public record UpdateFormRequest
 (
+    // changed from nullable to non-nullable to ensure that Subject 
+    // is always provided in the update request, its a required field in
+    // the FormData object, and we want to avoid null values in the 
+    // database. Cleanest solution.
     [StringLength(200, MinimumLength = 1)]
-    string? Subject,
+    string Subject, 
 
     [StringLength(5000)]
     string? Description,

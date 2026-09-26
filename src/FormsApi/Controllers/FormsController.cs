@@ -39,7 +39,7 @@ public class FormsController : ControllerBase
         if (!UserCanCreate(User))
         {
             _logger.LogWarning("Unauthorized attempt to create form data entry by user: {User}", User.Identity?.Name);
-            return Forbid();
+            return Forbid(); // could be an exception, this seems cleaner as its an expected case
         }
 
         // Validation handled via DataAnnotations on CreateFormRequest
@@ -59,12 +59,12 @@ public class FormsController : ControllerBase
             DeletedAt = null
         };
 
-        // Store in repository
+        // Store in repository, await to not block thread
         await _repository.CreateAsync(formData);
 
         _logger.LogInformation("Created new form data entry with ID: {FormId}", formData.Id);
 
-        // Return 201 Created with the new form's ID
+        // Return 201 Created with the new form location and data
         return CreatedAtAction(nameof(GetById), new { id = formData.Id }, formData);
     }
 
@@ -81,11 +81,11 @@ public class FormsController : ControllerBase
         // Query repository for form data by ID
         var formData = await _repository.GetByIdAsync(id);
 
-        // If not found, throw - handled centrally by ApiExceptionHandler
+        // If not found, throw, handled centrally by ApiExceptionHandler
         if (formData == null)
         {
             _logger.LogWarning("Form data entry with ID: {FormId} not found", id);
-            throw new FormNotFoundException(id);
+            throw new FormNotFoundException(id); // tradeoff of exception overhead vs clean handling in comparison to 'return NotFound()'
         }
 
         // If found, return 200 OK with form data
@@ -112,6 +112,9 @@ public class FormsController : ControllerBase
         return Ok(new { Items = items, TotalCount = totalCount });
     }
 
+    // PUT method to support full updates of form data entries
+    // PUT takes the null params from UpdateFormRequest and replaces the existing values with nulls,
+    // while PATCH takes the null params from PatchFormRequest and ignores them, keeping the existing values.
     [HttpPut("{id:guid}")] // PUT /api/forms/{id}
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateFormRequest request)
     {
@@ -142,11 +145,11 @@ public class FormsController : ControllerBase
         var updatedFormData = new FormData
         {
             Id = id,
-            Subject = request.Subject is null ? existing.Subject : InputSanitizer.Sanitize(request.Subject),
-            Description = request.Description is null ? existing.Description : InputSanitizer.SanitizeOptional(request.Description),
-            DueDate = request.DueDate ?? existing.DueDate,
-            Priority = request.Priority ?? existing.Priority,
-            Critical = request.Critical ?? existing.Critical,
+            Subject = InputSanitizer.Sanitize(request.Subject),
+            Description = InputSanitizer.SanitizeOptional(request.Description),
+            DueDate = request.DueDate,
+            Priority = request.Priority,
+            Critical = request.Critical,
             CreatedBy = existing.CreatedBy,
             CreatedAt = existing.CreatedAt,
             UpdatedAt = DateTime.UtcNow,
@@ -168,6 +171,64 @@ public class FormsController : ControllerBase
         return Ok(formData);
     }
 
+    // Added Patch method to support partial updates of form data entries
+    // as Put is intended for full replacement of the resource.
+    [HttpPatch("{id:guid}")] // PATCH /api/forms/{id}
+    public async Task<IActionResult> Patch(Guid id, [FromBody] PatchFormRequest request)
+    {
+        // Authorize user for modification request
+        if (!UserCanModify(User))
+        {
+            _logger.LogWarning("Unauthorized attempt to patch form data entry with ID: {FormId} by user: {User}", id, User.Identity?.Name);
+            return Forbid();
+        }
+
+        // Validation handled via DataAnnotations on PatchFormRequest
+
+        // retrieve existing form data from repository
+        var existing = await _repository.GetByIdAsync(id);
+        if (existing == null)
+        {
+            _logger.LogWarning("Attempted to patch non-existent form data entry with ID: {FormId}", id);
+            throw new FormNotFoundException(id);
+        }
+
+        if (existing.IsDeleted) // soft deleted records can't be updated
+        {
+            _logger.LogWarning("Attempted to patch deleted form data entry with ID: {FormId}", id);
+            throw new FormConflictException($"Form '{id}' has been deleted and cannot be patched.");
+        }
+
+        // Merge existing data with new data from request
+        var updatedFormData = new FormData
+        {
+            Id = id,
+            Subject = request.Subject is null ? existing.Subject : InputSanitizer.Sanitize(request.Subject),
+            Description = request.Description is null ? existing.Description : InputSanitizer.SanitizeOptional(request.Description),
+            DueDate = request.DueDate ?? existing.DueDate,
+            Priority = request.Priority ?? existing.Priority,
+            Critical = request.Critical ?? existing.Critical,
+            CreatedBy = existing.CreatedBy,
+            CreatedAt = existing.CreatedAt,
+            UpdatedAt = DateTime.UtcNow,
+            IsDeleted = existing.IsDeleted,
+            DeletedAt = existing.DeletedAt
+        };
+
+        // Call Update on repository with ID and updated data
+        var formData = await _repository.UpdateAsync(id, updatedFormData);
+
+        // If form not found (e.g. deleted concurrently between the checks above and now), throw
+        if (formData == null)
+        {
+            _logger.LogWarning("Failed to patch form data entry with ID: {FormId} - not found", id);
+            throw new FormNotFoundException(id);
+        }
+
+        // If patch successful, return 200 OK with updated form data
+        return Ok(formData);
+    }
+
     [HttpDelete("{id:guid}")] // DELETE /api/forms/{id}
     public async Task<IActionResult> Delete(Guid id)
     {
@@ -182,6 +243,21 @@ public class FormsController : ControllerBase
         if (id == Guid.Empty)
         {
             return BadRequest("Invalid ID");
+        }
+
+        // Check if the form data entry exists before attempting deletion
+        var formData = await _repository.GetByIdAsync(id);
+        if (formData == null)
+        {
+            _logger.LogWarning("Attempted to delete non-existent form data entry with ID: {FormId}", id);
+            throw new FormNotFoundException(id);
+        }
+
+        // If form data entry is already soft deleted, return 204 No Content
+        // This is idempotent behavior, as the resource is already in the desired state (deleted)
+        if (formData.IsDeleted)
+        {
+            return NoContent();
         }
 
         // Call Delete on repository with ID

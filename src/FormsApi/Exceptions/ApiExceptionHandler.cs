@@ -41,5 +41,13 @@ public class ApiExceptionHandler : IExceptionHandler
         }, cancellationToken);
 
         return true;
+
+        /* Example output for a 404 Not Found response:
+            {
+                "status": 404,
+                "title": "Form '3fa85f64-5717-4562-b3fc-2c963f66afa6' not found.",
+                "instance": "/api/forms/3fa85f64-5717-4562-b3fc-2c963f66afa6"
+            }
+        */
     }
 }
