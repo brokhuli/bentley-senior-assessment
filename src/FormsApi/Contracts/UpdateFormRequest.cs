@@ -10,6 +10,7 @@ public record UpdateFormRequest
     [StringLength(200, MinimumLength = 1)]
     string? Subject,
 
+    [StringLength(5000)]
     string? Description,
 
     [FutureDate] // a due date must be in the future

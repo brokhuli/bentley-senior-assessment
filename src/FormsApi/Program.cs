@@ -12,6 +12,8 @@ builder.Services.AddOpenApi();
 // Register local form data repository
 builder.Services.AddSingleton<IFormDataRepository, LocalFormDataRepository>();
 
+// Note: Did not make nor register a Logger service in DI
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

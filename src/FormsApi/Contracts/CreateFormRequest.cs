@@ -11,6 +11,7 @@ public record CreateFormRequest
     [StringLength(200, MinimumLength = 1)]
     string Subject,
 
+    [StringLength(5000)]
     string? Description,
 
     [FutureDate] // a due date must be in the future
@@ -21,5 +22,6 @@ public record CreateFormRequest
 
     bool? Critical,
 
+    [StringLength(100, MinimumLength = 1)]
     string CreatedBy
 );
