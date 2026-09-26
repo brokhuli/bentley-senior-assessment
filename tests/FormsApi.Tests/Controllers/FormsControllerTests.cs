@@ -1,5 +1,6 @@
 using FormsApi.Contracts;
 using FormsApi.Controllers;
+using FormsApi.Exceptions;
 using FormsApi.Repositories;
 using FormsApi.Models;
 using Microsoft.Extensions.Logging;
@@ -71,14 +72,12 @@ public class FormsControllerTests
     }
 
     [Fact]
-    public async Task Test_GetById_ReturnsNotFound_WhenFormDoesNotExist()
+    public async Task Test_GetById_Throws_WhenFormDoesNotExist()
     {
         var id = Guid.NewGuid();
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((FormData?)null);
 
-        var result = await _controller.GetById(id);
-
-        Assert.IsType<NotFoundResult>(result);
+        await Assert.ThrowsAsync<FormNotFoundException>(() => _controller.GetById(id));
     }
 
     [Fact]
@@ -130,20 +129,18 @@ public class FormsControllerTests
     }
 
     [Fact]
-    public async Task Test_Update_ReturnsNotFound_WhenFormDoesNotExist()
+    public async Task Test_Update_Throws_WhenFormDoesNotExist()
     {
         var id = Guid.NewGuid();
         var request = new UpdateFormRequest("Updated Subject", null, null, null, null);
 
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((FormData?)null);
 
-        var result = await _controller.Update(id, request);
-
-        Assert.IsType<NotFoundResult>(result);
+        await Assert.ThrowsAsync<FormNotFoundException>(() => _controller.Update(id, request));
     }
 
     [Fact]
-    public async Task Test_Update_ReturnsNotFound_WhenFormIsSoftDeleted()
+    public async Task Test_Update_Throws_WhenFormIsSoftDeleted()
     {
         var id = Guid.NewGuid();
         var existing = new FormData
@@ -158,9 +155,8 @@ public class FormsControllerTests
 
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
 
-        var result = await _controller.Update(id, request);
+        await Assert.ThrowsAsync<FormConflictException>(() => _controller.Update(id, request));
 
-        Assert.IsType<NotFoundResult>(result);
         _repository.Verify(r => r.UpdateAsync(It.IsAny<Guid>(), It.IsAny<FormData>()), Times.Never);
     }
 
@@ -185,13 +181,11 @@ public class FormsControllerTests
     }
 
     [Fact]
-    public async Task Test_Delete_ReturnsNotFound_WhenFormDoesNotExist()
+    public async Task Test_Delete_Throws_WhenFormDoesNotExist()
     {
         var id = Guid.NewGuid();
         _repository.Setup(r => r.DeleteAsync(id)).ReturnsAsync(false);
 
-        var result = await _controller.Delete(id);
-
-        Assert.IsType<NotFoundResult>(result);
+        await Assert.ThrowsAsync<FormNotFoundException>(() => _controller.Delete(id));
     }
 }

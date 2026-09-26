@@ -1,6 +1,54 @@
 @FormsApi_HostAddress = http://localhost:5150
+@formId = 00000000-0000-0000-0000-000000000000
 
-GET {{FormsApi_HostAddress}}/weatherforecast/
+### List forms (paginated, optionally filtered by subject)
+GET {{FormsApi_HostAddress}}/api/forms?page=1&pageSize=20
 Accept: application/json
+
+###
+
+### List forms filtered by subject
+GET {{FormsApi_HostAddress}}/api/forms?page=1&pageSize=20&subjectFilter=Test
+Accept: application/json
+
+###
+
+### Create a new form
+POST {{FormsApi_HostAddress}}/api/forms
+Content-Type: application/json
+
+{
+  "subject": "Test Subject",
+  "description": "Test Description",
+  "dueDate": "2027-01-01T00:00:00Z",
+  "priority": 5,
+  "critical": false,
+  "createdBy": "TestUser"
+}
+
+###
+
+### Get a form by ID (replace @formId with an ID returned from Create)
+GET {{FormsApi_HostAddress}}/api/forms/{{formId}}
+Accept: application/json
+
+###
+
+### Update an existing form (replace @formId with an ID returned from Create)
+PUT {{FormsApi_HostAddress}}/api/forms/{{formId}}
+Content-Type: application/json
+
+{
+  "subject": "Updated Subject",
+  "description": "Updated Description",
+  "dueDate": "2027-06-01T00:00:00Z",
+  "priority": 8,
+  "critical": true
+}
+
+###
+
+### Soft delete a form (replace @formId with an ID returned from Create)
+DELETE {{FormsApi_HostAddress}}/api/forms/{{formId}}
 
 ###

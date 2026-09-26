@@ -1,3 +1,4 @@
+using FormsApi.Exceptions;
 using FormsApi.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,7 +13,13 @@ builder.Services.AddOpenApi();
 // Register local form data repository
 builder.Services.AddSingleton<IFormDataRepository, LocalFormDataRepository>();
 
-// Note: Did not make nor register a Logger service in DI
+// Global exception handling. Maps domain exceptions to consistent
+// ProblemDetails responses and prevents unhandled exceptions from
+// leaking internal details to the client.
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.AddProblemDetails();
+
+// Note: Did not make nor register a custom Logger service in DI
 
 var app = builder.Build();
 
@@ -21,6 +28,8 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+app.UseExceptionHandler();
 
 app.UseHttpsRedirection();
 

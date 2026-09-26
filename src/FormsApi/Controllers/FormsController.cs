@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using FormsApi.Contracts;
+using FormsApi.Exceptions;
 using FormsApi.Models;
 using FormsApi.Repositories;
 using FormsApi.Validation;
@@ -59,7 +60,6 @@ public class FormsController : ControllerBase
         };
 
         // Store in repository
-        // TODO: handle exception?
         await _repository.CreateAsync(formData);
 
         _logger.LogInformation("Created new form data entry with ID: {FormId}", formData.Id);
@@ -81,11 +81,11 @@ public class FormsController : ControllerBase
         // Query repository for form data by ID
         var formData = await _repository.GetByIdAsync(id);
 
-        // If not found, return 404 Not Found
+        // If not found, throw - handled centrally by ApiExceptionHandler
         if (formData == null)
         {
             _logger.LogWarning("Form data entry with ID: {FormId} not found", id);
-            return NotFound();
+            throw new FormNotFoundException(id);
         }
 
         // If found, return 200 OK with form data
@@ -126,10 +126,16 @@ public class FormsController : ControllerBase
 
         // retrieve existing form data from repository
         var existing = await _repository.GetByIdAsync(id);
-        if (existing == null || existing.IsDeleted) // soft deleted records can't be updated
+        if (existing == null)
         {
-            _logger.LogWarning("Attempted to update non-existent or deleted form data entry with ID: {FormId}", id);
-            return NotFound();
+            _logger.LogWarning("Attempted to update non-existent form data entry with ID: {FormId}", id);
+            throw new FormNotFoundException(id);
+        }
+
+        if (existing.IsDeleted) // soft deleted records can't be updated
+        {
+            _logger.LogWarning("Attempted to update deleted form data entry with ID: {FormId}", id);
+            throw new FormConflictException($"Form '{id}' has been deleted and cannot be updated.");
         }
 
         // Merge existing data with new data from request
@@ -151,11 +157,11 @@ public class FormsController : ControllerBase
         // Call Update on repository with ID and updated data
         var formData = await _repository.UpdateAsync(id, updatedFormData);
 
-        // If form not found, return 404 Not Found
+        // If form not found (e.g. deleted concurrently between the checks above and now), throw
         if (formData == null)
         {
             _logger.LogWarning("Failed to update form data entry with ID: {FormId} - not found", id);
-            return NotFound();
+            throw new FormNotFoundException(id);
         }
 
         // If update successful, return 200 OK with updated form data
@@ -181,11 +187,11 @@ public class FormsController : ControllerBase
         // Call Delete on repository with ID
         bool success = await _repository.DeleteAsync(id);
 
-        // If form not found, return 404 Not Found
+        // If form not found, throw - handled centrally by ApiExceptionHandler
         if (!success)
         {
             _logger.LogWarning("Attempted to delete non-existent form data entry with ID: {FormId}", id);
-            return NotFound();
+            throw new FormNotFoundException(id);
         }
 
         // If delete successful, return 204 No Content
