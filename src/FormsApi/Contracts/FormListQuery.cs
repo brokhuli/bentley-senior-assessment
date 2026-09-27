@@ -3,7 +3,8 @@ namespace FormsApi.Contracts;
 
 // This record represents the query parameters for listing form 
 // data entries.
-public record FormListQuery
+// Validation included with DataAnnotation attributes
+public sealed record FormListQuery
 (
     [Range(1, int.MaxValue)] // > 1
     int Page = 1,

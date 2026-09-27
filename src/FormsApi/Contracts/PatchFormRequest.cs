@@ -5,7 +5,8 @@ namespace FormsApi.Contracts;
 
 // This record represents the request for patching an existing form data entry.
 // Should be a subset of the FormData object
-public record PatchFormRequest
+// Validation included with DataAnnotation attributes
+public sealed record PatchFormRequest
 (
     // nullable properties allow for partial updates, where only the 
     // provided fields will be updated.
@@ -15,7 +16,7 @@ public record PatchFormRequest
     [StringLength(5000)]
     string? Description,
 
-    [FutureDate] // a due date must be in the future
+    [FutureDate] // a due date must be in the future (custom attribute)
     DateTime? DueDate,
 
     [Range(1, 10)]

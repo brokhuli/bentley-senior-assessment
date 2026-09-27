@@ -5,7 +5,8 @@ namespace FormsApi.Contracts;
 
 // This record represents the request for creating a new form data entry.
 // Should be a subset of the FormData object
-public record CreateFormRequest
+// Validation included with DataAnnotation attributes
+public sealed record CreateFormRequest
 (
     [Required]
     [StringLength(200, MinimumLength = 1)]
@@ -14,7 +15,7 @@ public record CreateFormRequest
     [StringLength(5000)]
     string? Description,
 
-    [FutureDate] // a due date must be in the future
+    [FutureDate] // a due date must be in the future (custom attribute)
     DateTime? DueDate,
 
     [Range(1, 10)]

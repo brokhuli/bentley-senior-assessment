@@ -3,7 +3,10 @@ using FormsApi.Models;
 
 namespace FormsApi.Repositories;
 
-public class LocalFormDataRepository : IFormDataRepository
+// In-process in-memory implementation of repository.
+// Simple but fully allows testing of the API without needing a database connection.
+// Can be set with DI in Program.cs.
+public class InProcessFormDataRepository : IFormDataRepository
 {
     // Chose ConcurrentDictionary for thread-safety and quick lookups by Guid
     private readonly ConcurrentDictionary<Guid, FormData> _forms = new();
@@ -58,7 +61,7 @@ public class LocalFormDataRepository : IFormDataRepository
         return (items, totalCount);
     }
 
-    // Update an existing form data entry by its unique identifier
+    // Update an existing form data record by its unique identifier
     public async Task<FormData?> UpdateAsync(Guid id, FormData form)
     {
         // Check if the form exists in the ConcurrentDictionary
@@ -67,15 +70,15 @@ public class LocalFormDataRepository : IFormDataRepository
             return null; // If not found, return null
         }
 
-        // If found, update the existing FormData entry with new values
+        // If found, update the existing FormData record with new values
         _forms[id] = form;
 
         return form;
     }
 
-    // Delete a form data entry by its unique identifier
+    // Delete a form data record by its unique identifier
     // Note that this is a soft delete, 
-    // meaning the entry will be marked as deleted but not removed from storage
+    // meaning the record will be marked as deleted but not removed from storage
     public async Task<bool> DeleteAsync(Guid id)
     {
         // Check if the form exists in the ConcurrentDictionary
@@ -85,8 +88,11 @@ public class LocalFormDataRepository : IFormDataRepository
         }
 
         // If found, mark the FormData entry as deleted (soft delete)
-        existingForm.IsDeleted = true;
-        existingForm.DeletedAt = DateTime.UtcNow;
+        if (!existingForm.IsDeleted)
+        {
+            existingForm.IsDeleted = true;
+            existingForm.DeletedAt = DateTime.UtcNow;
+        }
 
         // Return true to indicate successful deletion
         return true;

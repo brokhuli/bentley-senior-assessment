@@ -64,3 +64,8 @@ secrets.json
 
 # Temporary files
 Temp/
+
+# Local SQLite databases
+*.db
+*.db-shm
+*.db-wal

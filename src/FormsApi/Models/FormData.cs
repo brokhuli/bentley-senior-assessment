@@ -1,12 +1,17 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace FormsApi.Models;
 
 public class FormData
 {
     // Set internally
+    [Key]
     public Guid Id { get; set; }
 
+    [StringLength(200, MinimumLength = 1)]
     public required string Subject { get; set; }
 
+    [StringLength(5000)]
     public string? Description { get; set; }
 
     public DateTime? DueDate { get; set; }
@@ -23,6 +28,7 @@ public class FormData
 
     // Assuming this is set via an auth service and delivered when 
     // creating a form rather than something FormsApi would set itself.
+    [StringLength(100, MinimumLength = 1)]
     public required string CreatedBy { get; set; }
 
     // Added to handle soft deletes
