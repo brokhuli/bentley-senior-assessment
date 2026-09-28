@@ -1,19 +1,19 @@
 @FormsApi_HostAddress = http://localhost:5150
-@formId = 00000000-0000-0000-0000-000000000000
 
-### List forms (paginated, optionally filtered by subject)
-GET {{FormsApi_HostAddress}}/api/forms?page=1&pageSize=20
-Accept: application/json
+# Requests are chained via named request variables (# @name) so the form ID
+# and ETag flow from one request to the next. Run them top to bottom.
+#
+# Writes (PUT/PATCH/DELETE) require an If-Match header carrying the ETag from
+# the most recent read/write of the form. Each write returns a new ETag.
 
-###
+@formId = {{createForm.response.body.$.id}}
 
-### List forms filtered by subject
-GET {{FormsApi_HostAddress}}/api/forms?page=1&pageSize=20&subjectFilter=Test
-Accept: application/json
+##############################################################################
+# Happy path
+##############################################################################
 
-###
-
-### Create a new form
+### Create a new form -> 201 Created (Location + ETag headers)
+# @name createForm
 POST {{FormsApi_HostAddress}}/api/forms
 Content-Type: application/json
 
@@ -26,17 +26,38 @@ Content-Type: application/json
   "createdBy": "TestUser"
 }
 
-###
+### Create a minimal form (only required fields) -> 201 Created
+POST {{FormsApi_HostAddress}}/api/forms
+Content-Type: application/json
 
-### Get a form by ID (replace @formId with an ID returned from Create)
+{
+  "subject": "Minimal Subject",
+  "createdBy": "TestUser"
+}
+
+### Get a form by ID -> 200 OK (ETag header)
+# @name getForm
 GET {{FormsApi_HostAddress}}/api/forms/{{formId}}
 Accept: application/json
 
-###
+### List forms (paginated) -> 200 OK { items, totalCount }
+GET {{FormsApi_HostAddress}}/api/forms?page=1&pageSize=20
+Accept: application/json
 
-### Update an existing form (replace @formId with an ID returned from Create)
+### List forms using defaults (page=1, pageSize=20) -> 200 OK
+GET {{FormsApi_HostAddress}}/api/forms
+Accept: application/json
+
+### List forms filtered by subject -> 200 OK
+GET {{FormsApi_HostAddress}}/api/forms?page=1&pageSize=20&subjectFilter=Test
+Accept: application/json
+
+### Full update (PUT) using ETag from Get -> 200 OK (new ETag)
+# Omitted optional fields are replaced with null.
+# @name updateForm
 PUT {{FormsApi_HostAddress}}/api/forms/{{formId}}
 Content-Type: application/json
+If-Match: {{getForm.response.headers.ETag}}
 
 {
   "subject": "Updated Subject",
@@ -46,9 +67,168 @@ Content-Type: application/json
   "critical": true
 }
 
-###
+### Partial update (PATCH) using ETag from PUT -> 200 OK (new ETag)
+# Omitted fields keep their existing values.
+# @name patchForm
+PATCH {{FormsApi_HostAddress}}/api/forms/{{formId}}
+Content-Type: application/json
+If-Match: {{updateForm.response.headers.ETag}}
 
-### Soft delete a form (replace @formId with an ID returned from Create)
+{
+  "priority": 3
+}
+
+##############################################################################
+# Concurrency / precondition errors (run after the happy-path PUT/PATCH)
+##############################################################################
+
+### PUT without If-Match -> 400 Bad Request
+PUT {{FormsApi_HostAddress}}/api/forms/{{formId}}
+Content-Type: application/json
+
+{
+  "subject": "No If-Match"
+}
+
+### PATCH without If-Match -> 400 Bad Request
+PATCH {{FormsApi_HostAddress}}/api/forms/{{formId}}
+Content-Type: application/json
+
+{
+  "priority": 1
+}
+
+### PUT with stale ETag (from the original Get) -> 412 Precondition Failed
+PUT {{FormsApi_HostAddress}}/api/forms/{{formId}}
+Content-Type: application/json
+If-Match: {{getForm.response.headers.ETag}}
+
+{
+  "subject": "Stale Update"
+}
+
+### PATCH with stale ETag (from the original Get) -> 412 Precondition Failed
+PATCH {{FormsApi_HostAddress}}/api/forms/{{formId}}
+Content-Type: application/json
+If-Match: {{getForm.response.headers.ETag}}
+
+{
+  "priority": 2
+}
+
+### DELETE without If-Match -> 400 Bad Request
 DELETE {{FormsApi_HostAddress}}/api/forms/{{formId}}
 
-###
+### DELETE with stale ETag (from the original Get) -> 412 Precondition Failed
+DELETE {{FormsApi_HostAddress}}/api/forms/{{formId}}
+If-Match: {{getForm.response.headers.ETag}}
+
+##############################################################################
+# Validation errors -> 400 Bad Request (ValidationProblemDetails)
+##############################################################################
+
+### Create missing required fields (subject, createdBy) -> 400
+POST {{FormsApi_HostAddress}}/api/forms
+Content-Type: application/json
+
+{
+  "description": "Missing subject and createdBy"
+}
+
+### Create with priority out of range and past due date -> 400
+POST {{FormsApi_HostAddress}}/api/forms
+Content-Type: application/json
+
+{
+  "subject": "Bad Values",
+  "dueDate": "2020-01-01T00:00:00Z",
+  "priority": 11,
+  "createdBy": "TestUser"
+}
+
+### PATCH with empty subject and priority out of range -> 400
+PATCH {{FormsApi_HostAddress}}/api/forms/{{formId}}
+Content-Type: application/json
+If-Match: {{patchForm.response.headers.ETag}}
+
+{
+  "subject": "",
+  "priority": 0
+}
+
+### List with invalid paging (pageSize > 50, page < 1) -> 400
+GET {{FormsApi_HostAddress}}/api/forms?page=0&pageSize=51
+Accept: application/json
+
+##############################################################################
+# Delete (soft) and post-delete behaviour
+##############################################################################
+
+### Soft delete using ETag from PATCH -> 204 No Content
+DELETE {{FormsApi_HostAddress}}/api/forms/{{formId}}
+If-Match: {{patchForm.response.headers.ETag}}
+
+### Delete again (idempotent, no If-Match needed) -> 204 No Content
+DELETE {{FormsApi_HostAddress}}/api/forms/{{formId}}
+
+### Get deleted form -> 200 OK with isDeleted = true
+# @name getDeletedForm
+GET {{FormsApi_HostAddress}}/api/forms/{{formId}}
+Accept: application/json
+
+### PUT on deleted form -> 409 Conflict
+PUT {{FormsApi_HostAddress}}/api/forms/{{formId}}
+Content-Type: application/json
+If-Match: {{getDeletedForm.response.headers.ETag}}
+
+{
+  "subject": "Update After Delete"
+}
+
+### PATCH on deleted form -> 409 Conflict
+PATCH {{FormsApi_HostAddress}}/api/forms/{{formId}}
+Content-Type: application/json
+If-Match: {{getDeletedForm.response.headers.ETag}}
+
+{
+  "priority": 4
+}
+
+##############################################################################
+# Not found / invalid ID
+##############################################################################
+
+@missingId = 11111111-1111-1111-1111-111111111111
+
+### Get non-existent form -> 404 Not Found
+GET {{FormsApi_HostAddress}}/api/forms/{{missingId}}
+Accept: application/json
+
+### PUT non-existent form -> 404 Not Found
+PUT {{FormsApi_HostAddress}}/api/forms/{{missingId}}
+Content-Type: application/json
+If-Match: "{{missingId}}"
+
+{
+  "subject": "Does Not Exist"
+}
+
+### PATCH non-existent form -> 404 Not Found
+PATCH {{FormsApi_HostAddress}}/api/forms/{{missingId}}
+Content-Type: application/json
+If-Match: "{{missingId}}"
+
+{
+  "priority": 4
+}
+
+### DELETE non-existent form -> 404 Not Found
+DELETE {{FormsApi_HostAddress}}/api/forms/{{missingId}}
+If-Match: "{{missingId}}"
+
+### DELETE with empty GUID -> 400 Bad Request
+DELETE {{FormsApi_HostAddress}}/api/forms/00000000-0000-0000-0000-000000000000
+
+### Get with non-GUID ID (route constraint) -> 404 Not Found
+GET {{FormsApi_HostAddress}}/api/forms/not-a-guid
+Accept: application/json

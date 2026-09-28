@@ -5,13 +5,22 @@ A .NET 10 Web API for managing form records (`FormData`), built with ASP.NET Cor
 ## Running the API
 
 ```bash
-dotnet run --project src/FormsApi
+dotnet ef database update --project src/FormsApi
+dotnet run --project src/FormsApi --launch-profile http
+
 ```
 
 ## Running the tests
 
 ```bash
 dotnet test
+```
+
+## Tear down db
+
+```bash
+Stop-Process -Name FormsApi
+dotnet ef database drop --force --project src/FormsApi
 ```
 
 ## API endpoints
