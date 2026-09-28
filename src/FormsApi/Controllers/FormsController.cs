@@ -27,10 +27,8 @@ public class FormsController : ControllerBase
     // Actual implementation out of scope.
     // Assuming here that users have full access to view or modify regardless
     // of the exact record ownsership.
-    private bool UserCanCreate(ClaimsPrincipal user) => true;
     private bool UserCanView(ClaimsPrincipal user) => true;
     private bool UserCanModify(ClaimsPrincipal user) => true;
-    private bool UserCanDelete(ClaimsPrincipal user) => true;
 
     // Writes the current VersionKey as a quoted ETag response header so
     // clients can round-trip it back via If-Match on their next write.
@@ -48,7 +46,7 @@ public class FormsController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateFormRequest request)
     {
         // Authorize user for creation request
-        if (!UserCanCreate(User))
+        if (!UserCanModify(User))
         {
             _logger.LogWarning("Unauthorized attempt to create form data entry by user: {User}", User.Identity?.Name);
             return Forbid(); // could be an exception, this seems cleaner as its an expected case
@@ -263,7 +261,7 @@ public class FormsController : ControllerBase
     public async Task<IActionResult> Delete(Guid id)
     {
         // Authorize user for deletion request
-        if (!UserCanDelete(User))
+        if (!UserCanModify(User))
         {
             _logger.LogWarning("Unauthorized attempt to delete form data entry with ID: {FormId} by user: {User}", id, User.Identity?.Name);
             return Forbid();

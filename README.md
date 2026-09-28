@@ -1,6 +1,6 @@
 # Bentley Senior Assessment — Forms API
 
-A .NET 10 Web API for managing form records (`FormData`), built with ASP.NET Core controllers and an in-memory repository.
+A .NET 10 Web API for managing form records (`FormData`), built with ASP.NET Core controllers and EFCore/Sqlite.
 
 ## Running the API
 
@@ -18,13 +18,14 @@ dotnet test
 
 All endpoints are rooted at `api/forms`.
 
-| Method | Route             | Description        |
-| ------ | ----------------- | ------------------ |
-| POST   | `/api/forms`      | Create a form      |
-| GET    | `/api/forms/{id}` | Get a form by id   |
-| GET    | `/api/forms`      | List forms (paged) |
-| PUT    | `/api/forms/{id}` | Update a form      |
-| DELETE | `/api/forms/{id}` | Delete a form      |
+| Method | Route             | Description             |
+| ------ | ----------------- | ----------------------- |
+| POST   | `/api/forms`      | Create a form           |
+| GET    | `/api/forms/{id}` | Get a form by id        |
+| GET    | `/api/forms`      | List forms (paged)      |
+| PUT    | `/api/forms/{id}` | Update a form           |
+| PATCH  | `/api/forms/{id}` | Partially update a form |
+| DELETE | `/api/forms/{id}` | Delete a form           |
 
 ## Further Improvements
 
@@ -45,6 +46,7 @@ All endpoints are rooted at `api/forms`.
 ### Hardening for Scalability
 
 - Depending on requirements, harden the api for expected user base / load / SLAs:
+  - Cancelation tokens to improve throughput if clients disconnect freeing db connections
   - Rate limiting for single client request pressure
   - Caching for hot reads
   - Indexing on db if reads are significantly greater than writes
