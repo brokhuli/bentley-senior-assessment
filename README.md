@@ -10,17 +10,17 @@ dotnet run --project src/FormsApi --launch-profile http
 
 ```
 
-## Running the tests
-
-```bash
-dotnet test
-```
-
 ## Tear down db
 
 ```bash
 Stop-Process -Name FormsApi
 dotnet ef database drop --force --project src/FormsApi
+```
+
+## Running the tests
+
+```bash
+dotnet test
 ```
 
 ## API endpoints
