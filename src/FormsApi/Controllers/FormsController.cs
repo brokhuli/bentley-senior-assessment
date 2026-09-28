@@ -32,6 +32,18 @@ public class FormsController : ControllerBase
     private bool UserCanModify(ClaimsPrincipal user) => true;
     private bool UserCanDelete(ClaimsPrincipal user) => true;
 
+    // Writes the current VersionKey as a quoted ETag response header so
+    // clients can round-trip it back via If-Match on their next write.
+    private void SetETag(Guid versionKey) => Response.Headers.ETag = $"\"{versionKey}\"";
+
+    // Reads the caller's expected VersionKey from the If-Match request header.
+    // Returns null if the header is missing or not a valid Guid.
+    private Guid? GetIfMatch()
+    {
+        var raw = Request.Headers.IfMatch.ToString().Trim('"');
+        return Guid.TryParse(raw, out var versionKey) ? versionKey : null;
+    }
+
     [HttpPost] // POST /api/forms
     public async Task<IActionResult> Create([FromBody] CreateFormRequest request)
     {
@@ -64,7 +76,8 @@ public class FormsController : ControllerBase
 
         _logger.LogInformation("Created new form data entry with ID: {FormId}", formData.Id);
 
-        // Return 201 Created with the new form location and data
+        // Return 201 Created with the new form location, data, and its ETag
+        SetETag(formData.VersionKey);
         return CreatedAtAction(nameof(GetById), new { id = formData.Id }, formData);
     }
 
@@ -81,14 +94,15 @@ public class FormsController : ControllerBase
         // Query repository for form data by ID
         var formData = await _repository.GetByIdAsync(id);
 
-        // If not found, throw, handled centrally by ApiExceptionHandler
+        // If not found, throw
         if (formData == null)
         {
             _logger.LogWarning("Form data entry with ID: {FormId} not found", id);
             throw new FormNotFoundException(id); // tradeoff of exception overhead vs clean handling in comparison to 'return NotFound()'
         }
 
-        // If found, return 200 OK with form data
+        // If found, return 200 OK with form data and its ETag
+        SetETag(formData.VersionKey);
         return Ok(formData);
     }
 
@@ -141,6 +155,13 @@ public class FormsController : ControllerBase
             throw new FormConflictException($"Form '{id}' has been deleted and cannot be updated.");
         }
 
+        // Caller must supply If-Match with the VersionKey they last read
+        var expectedVersionKey = GetIfMatch();
+        if (expectedVersionKey is null)
+        {
+            return BadRequest("An If-Match header with the current ETag is required to update a form.");
+        }
+
         // Merge existing data with new data from request
         var updatedFormData = new FormData
         {
@@ -158,7 +179,7 @@ public class FormsController : ControllerBase
         };
 
         // Call Update on repository with ID, updated data, and concurrency token
-        var formData = await _repository.UpdateAsync(id, updatedFormData, request.VersionKey);
+        var formData = await _repository.UpdateAsync(id, updatedFormData, expectedVersionKey.Value);
 
         // If form not found, throw
         if (formData == null)
@@ -167,7 +188,8 @@ public class FormsController : ControllerBase
             throw new FormNotFoundException(id);
         }
 
-        // If update successful, return 200 OK with updated form data
+        // If update successful, return 200 OK with updated form data and its new ETag
+        SetETag(formData.VersionKey);
         return Ok(formData);
     }
 
@@ -199,6 +221,13 @@ public class FormsController : ControllerBase
             throw new FormConflictException($"Form '{id}' has been deleted and cannot be patched.");
         }
 
+        // Caller must supply If-Match with the VersionKey they last read
+        var expectedVersionKey = GetIfMatch();
+        if (expectedVersionKey is null)
+        {
+            return BadRequest("An If-Match header with the current ETag is required to patch a form.");
+        }
+
         // Merge existing data with new data from request
         var updatedFormData = new FormData
         {
@@ -216,7 +245,7 @@ public class FormsController : ControllerBase
         };
 
         // Call Update on repository with ID, updated data, and concurrency token
-        var formData = await _repository.UpdateAsync(id, updatedFormData, request.VersionKey);
+        var formData = await _repository.UpdateAsync(id, updatedFormData, expectedVersionKey.Value);
 
         // If form not found, throw
         if (formData == null)
@@ -225,12 +254,13 @@ public class FormsController : ControllerBase
             throw new FormNotFoundException(id);
         }
 
-        // If patch successful, return 200 OK with updated form data
+        // If patch successful, return 200 OK with updated form data and its new ETag
+        SetETag(formData.VersionKey);
         return Ok(formData);
     }
 
     [HttpDelete("{id:guid}")] // DELETE /api/forms/{id}
-    public async Task<IActionResult> Delete(Guid id, [FromQuery] Guid expectedVersionKey)
+    public async Task<IActionResult> Delete(Guid id)
     {
         // Authorize user for deletion request
         if (!UserCanDelete(User))
@@ -260,10 +290,17 @@ public class FormsController : ControllerBase
             return NoContent();
         }
 
-        // Call Delete on repository with ID and concurrency token
-        bool success = await _repository.DeleteAsync(id, expectedVersionKey);
+        // Caller must supply If-Match with the VersionKey they last read
+        var expectedVersionKey = GetIfMatch();
+        if (expectedVersionKey is null)
+        {
+            return BadRequest("An If-Match header with the current ETag is required to delete a form.");
+        }
 
-        // If form not found, throw - handled centrally by ApiExceptionHandler
+        // Call Delete on repository with ID and concurrency token
+        bool success = await _repository.DeleteAsync(id, expectedVersionKey.Value);
+
+        // If form not found, throw
         if (!success)
         {
             _logger.LogWarning("Attempted to delete non-existent form data entry with ID: {FormId}", id);

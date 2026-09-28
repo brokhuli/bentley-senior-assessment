@@ -74,7 +74,7 @@ public class InProcessFormDataRepository : IFormDataRepository
         // Reject the write if the record has moved on since the caller last read it
         if (existingForm.VersionKey != expectedVersionKey)
         {
-            throw new FormConflictException($"Form '{id}' was modified by another request. Please reload and try again.");
+            throw new FormPreconditionFailedException(id);
         }
 
         // If found, update the existing FormData record with new values, bumping the concurrency token
@@ -101,7 +101,7 @@ public class InProcessFormDataRepository : IFormDataRepository
             // Reject the write if the record has moved on since the caller last read it
             if (existingForm.VersionKey != expectedVersionKey)
             {
-                throw new FormConflictException($"Form '{id}' was modified by another request. Please reload and try again.");
+                throw new FormPreconditionFailedException(id);
             }
 
             existingForm.IsDeleted = true;

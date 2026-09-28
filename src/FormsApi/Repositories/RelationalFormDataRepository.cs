@@ -79,7 +79,7 @@ public class RelationalFormDataRepository : IFormDataRepository
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new FormConflictException($"Form '{id}' was modified by another request. Please reload and try again.");
+            throw new FormPreconditionFailedException(id);
         }
 
         return existingForm;
@@ -113,7 +113,7 @@ public class RelationalFormDataRepository : IFormDataRepository
             }
             catch (DbUpdateConcurrencyException)
             {
-                throw new FormConflictException($"Form '{id}' was modified by another request. Please reload and try again.");
+                throw new FormPreconditionFailedException(id);
             }
         }
 

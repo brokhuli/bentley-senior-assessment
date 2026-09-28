@@ -3,6 +3,7 @@ using FormsApi.Controllers;
 using FormsApi.Exceptions;
 using FormsApi.Repositories;
 using FormsApi.Models;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi;
 using Moq;
@@ -18,8 +19,15 @@ public class FormsControllerTests
 
     public FormsControllerTests()
     {
-        _controller = new FormsController(_repository.Object, _logger.Object);
+        _controller = new FormsController(_repository.Object, _logger.Object)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
     }
+
+    // Sets the If-Match request header the controller reads as the caller's expected VersionKey.
+    private void SetIfMatchHeader(Guid versionKey) =>
+        _controller.ControllerContext.HttpContext.Request.Headers.IfMatch = $"\"{versionKey}\"";
 
     [Fact]
     public async Task Test_CreateFormsController_ReturnsInstance()
@@ -197,7 +205,7 @@ public class FormsControllerTests
             CreatedAt = DateTime.UtcNow,
             IsDeleted = false
         };
-        var request = new UpdateFormRequest("Updated Subject", null, null, null, null, existing.VersionKey);
+        var request = new UpdateFormRequest("Updated Subject", null, null, null, null);
         var updated = new FormData
         {
             Id = id,
@@ -209,6 +217,7 @@ public class FormsControllerTests
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
         _repository.Setup(r => r.UpdateAsync(id, It.IsAny<FormData>(), existing.VersionKey)).ReturnsAsync(updated);
 
+        SetIfMatchHeader(existing.VersionKey);
         var result = await _controller.Update(id, request);
 
         var okResult = Assert.IsType<OkObjectResult>(result);
@@ -216,10 +225,32 @@ public class FormsControllerTests
     }
 
     [Fact]
+    public async Task Test_Update_ReturnsBadRequest_WhenIfMatchHeaderIsMissing()
+    {
+        var id = Guid.NewGuid();
+        var existing = new FormData
+        {
+            Id = id,
+            Subject = "Original Subject",
+            CreatedBy = "TestUser",
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = false
+        };
+        var request = new UpdateFormRequest("Updated Subject", null, null, null, null);
+
+        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
+
+        var result = await _controller.Update(id, request);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        _repository.Verify(r => r.UpdateAsync(It.IsAny<Guid>(), It.IsAny<FormData>(), It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Test_Update_Throws_WhenFormDoesNotExist()
     {
         var id = Guid.NewGuid();
-        var request = new UpdateFormRequest("Updated Subject", null, null, null, null, Guid.NewGuid());
+        var request = new UpdateFormRequest("Updated Subject", null, null, null, null);
 
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((FormData?)null);
 
@@ -238,7 +269,7 @@ public class FormsControllerTests
             CreatedAt = DateTime.UtcNow,
             IsDeleted = true
         };
-        var request = new UpdateFormRequest("Updated Subject", null, null, null, null, existing.VersionKey);
+        var request = new UpdateFormRequest("Updated Subject", null, null, null, null);
 
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
 
@@ -260,13 +291,14 @@ public class FormsControllerTests
             IsDeleted = false
         };
         var staleRowVersion = Guid.NewGuid();
-        var request = new UpdateFormRequest("Updated Subject", null, null, null, null, staleRowVersion);
+        var request = new UpdateFormRequest("Updated Subject", null, null, null, null);
 
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
         _repository.Setup(r => r.UpdateAsync(id, It.IsAny<FormData>(), staleRowVersion))
-            .ThrowsAsync(new FormConflictException($"Form '{id}' was modified by another request. Please reload and try again."));
+            .ThrowsAsync(new FormPreconditionFailedException(id));
 
-        await Assert.ThrowsAsync<FormConflictException>(() => _controller.Update(id, request));
+        SetIfMatchHeader(staleRowVersion);
+        await Assert.ThrowsAsync<FormPreconditionFailedException>(() => _controller.Update(id, request));
     }
 
     [Fact]
@@ -281,7 +313,7 @@ public class FormsControllerTests
             CreatedAt = DateTime.UtcNow,
             IsDeleted = false
         };
-        var request = new PatchFormRequest("Patched Subject", null, null, null, null, existing.VersionKey);
+        var request = new PatchFormRequest("Patched Subject", null, null, null, null);
         var patched = new FormData
         {
             Id = id,
@@ -293,6 +325,7 @@ public class FormsControllerTests
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
         _repository.Setup(r => r.UpdateAsync(id, It.IsAny<FormData>(), existing.VersionKey)).ReturnsAsync(patched);
 
+        SetIfMatchHeader(existing.VersionKey);
         var result = await _controller.Patch(id, request);
 
         var okResult = Assert.IsType<OkObjectResult>(result);
@@ -316,12 +349,13 @@ public class FormsControllerTests
             CreatedAt = DateTime.UtcNow,
             IsDeleted = false
         };
-        var request = new PatchFormRequest(null, null, null, null, null, existing.VersionKey);
+        var request = new PatchFormRequest(null, null, null, null, null);
 
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
         _repository.Setup(r => r.UpdateAsync(id, It.IsAny<FormData>(), existing.VersionKey))
             .ReturnsAsync((Guid _, FormData f, Guid _) => f);
 
+        SetIfMatchHeader(existing.VersionKey);
         var result = await _controller.Patch(id, request);
 
         var okResult = Assert.IsType<OkObjectResult>(result);
@@ -334,10 +368,32 @@ public class FormsControllerTests
     }
 
     [Fact]
+    public async Task Test_Patch_ReturnsBadRequest_WhenIfMatchHeaderIsMissing()
+    {
+        var id = Guid.NewGuid();
+        var existing = new FormData
+        {
+            Id = id,
+            Subject = "Original Subject",
+            CreatedBy = "TestUser",
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = false
+        };
+        var request = new PatchFormRequest("Patched Subject", null, null, null, null);
+
+        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
+
+        var result = await _controller.Patch(id, request);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        _repository.Verify(r => r.UpdateAsync(It.IsAny<Guid>(), It.IsAny<FormData>(), It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Test_Patch_Throws_WhenFormDoesNotExist()
     {
         var id = Guid.NewGuid();
-        var request = new PatchFormRequest("Patched Subject", null, null, null, null, Guid.NewGuid());
+        var request = new PatchFormRequest("Patched Subject", null, null, null, null);
 
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((FormData?)null);
 
@@ -356,7 +412,7 @@ public class FormsControllerTests
             CreatedAt = DateTime.UtcNow,
             IsDeleted = true
         };
-        var request = new PatchFormRequest("Patched Subject", null, null, null, null, existing.VersionKey);
+        var request = new PatchFormRequest("Patched Subject", null, null, null, null);
 
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
 
@@ -368,7 +424,7 @@ public class FormsControllerTests
     [Fact]
     public async Task Test_Delete_ReturnsBadRequest_WhenIdIsEmpty()
     {
-        var result = await _controller.Delete(Guid.Empty, Guid.NewGuid());
+        var result = await _controller.Delete(Guid.Empty);
 
         Assert.IsType<BadRequestObjectResult>(result);
         _repository.Verify(r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<Guid>()), Times.Never);
@@ -390,7 +446,8 @@ public class FormsControllerTests
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
         _repository.Setup(r => r.DeleteAsync(id, existing.VersionKey)).ReturnsAsync(true);
 
-        var result = await _controller.Delete(id, existing.VersionKey);
+        SetIfMatchHeader(existing.VersionKey);
+        var result = await _controller.Delete(id);
 
         Assert.IsType<NoContentResult>(result);
     }
@@ -410,7 +467,7 @@ public class FormsControllerTests
 
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
 
-        var result = await _controller.Delete(id, existing.VersionKey);
+        var result = await _controller.Delete(id);
 
         Assert.IsType<NoContentResult>(result);
         _repository.Verify(r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<Guid>()), Times.Never);
@@ -422,8 +479,29 @@ public class FormsControllerTests
         var id = Guid.NewGuid();
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((FormData?)null);
 
-        await Assert.ThrowsAsync<FormNotFoundException>(() => _controller.Delete(id, Guid.NewGuid()));
+        await Assert.ThrowsAsync<FormNotFoundException>(() => _controller.Delete(id));
 
+        _repository.Verify(r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Test_Delete_ReturnsBadRequest_WhenIfMatchHeaderIsMissing()
+    {
+        var id = Guid.NewGuid();
+        var existing = new FormData
+        {
+            Id = id,
+            Subject = "Test Subject",
+            CreatedBy = "TestUser",
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = false
+        };
+
+        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
+
+        var result = await _controller.Delete(id);
+
+        Assert.IsType<BadRequestObjectResult>(result);
         _repository.Verify(r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<Guid>()), Times.Never);
     }
 
@@ -443,7 +521,8 @@ public class FormsControllerTests
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
         _repository.Setup(r => r.DeleteAsync(id, existing.VersionKey)).ReturnsAsync(false);
 
-        await Assert.ThrowsAsync<FormNotFoundException>(() => _controller.Delete(id, existing.VersionKey));
+        SetIfMatchHeader(existing.VersionKey);
+        await Assert.ThrowsAsync<FormNotFoundException>(() => _controller.Delete(id));
     }
 
     [Fact]
@@ -462,8 +541,9 @@ public class FormsControllerTests
 
         _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(existing);
         _repository.Setup(r => r.DeleteAsync(id, staleRowVersion))
-            .ThrowsAsync(new FormConflictException($"Form '{id}' was modified by another request. Please reload and try again."));
+            .ThrowsAsync(new FormPreconditionFailedException(id));
 
-        await Assert.ThrowsAsync<FormConflictException>(() => _controller.Delete(id, staleRowVersion));
+        SetIfMatchHeader(staleRowVersion);
+        await Assert.ThrowsAsync<FormPreconditionFailedException>(() => _controller.Delete(id));
     }
 }

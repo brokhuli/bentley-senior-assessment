@@ -23,6 +23,7 @@ public class ApiExceptionHandler : IExceptionHandler
         {
             FormNotFoundException => (StatusCodes.Status404NotFound, exception.Message),
             FormConflictException => (StatusCodes.Status409Conflict, exception.Message),
+            FormPreconditionFailedException => (StatusCodes.Status412PreconditionFailed, exception.Message),
             _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred.")
         };
 

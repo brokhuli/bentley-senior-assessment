@@ -34,7 +34,7 @@ All endpoints are rooted at `api/forms`.
 
 ### Separation of Concerns
 
-- I would move the business logic in FormsController out to a Service so the logic in FormsController only receives, validates auth, send request to service, report result. Keeps the logic in the controller within its scope. Also allows you to test FormsController and the Service separately.
+- I would move the business logic in FormsController out to a Service so the logic in FormsController only receives, validates auth, send request to service, report result. Keeps the logic in the controller within its scope. Also allows you to test FormsController and the Service separately. Also, the FormsController file is getting large at this point, so moving a good portion of the code over to a service helps for readablility.
 
 - Possibly use a different FormData object for entity and response objects to decouple controller layer, service layer, and db layer.
 

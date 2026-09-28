@@ -138,7 +138,7 @@ public class InProcessFormDataRepositoryTests
             CreatedAt = existing.CreatedAt
         };
 
-        await Assert.ThrowsAsync<FormConflictException>(() => _repository.UpdateAsync(existing.Id, updated, staleVersionKey));
+        await Assert.ThrowsAsync<FormPreconditionFailedException>(() => _repository.UpdateAsync(existing.Id, updated, staleVersionKey));
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public class InProcessFormDataRepositoryTests
         await _repository.CreateAsync(existing);
         var staleVersionKey = Guid.NewGuid();
 
-        await Assert.ThrowsAsync<FormConflictException>(() => _repository.DeleteAsync(existing.Id, staleVersionKey));
+        await Assert.ThrowsAsync<FormPreconditionFailedException>(() => _repository.DeleteAsync(existing.Id, staleVersionKey));
     }
 
     [Fact]
