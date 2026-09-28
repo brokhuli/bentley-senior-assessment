@@ -25,7 +25,8 @@ namespace FormsApi.Migrations
                     UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: true),
                     CreatedBy = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
                     IsDeleted = table.Column<bool>(type: "INTEGER", nullable: false),
-                    DeletedAt = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    DeletedAt = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    VersionKey = table.Column<Guid>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {

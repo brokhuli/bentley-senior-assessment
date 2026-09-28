@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using FormsApi.Exceptions;
 using FormsApi.Models;
 
 namespace FormsApi.Repositories;
@@ -62,7 +63,7 @@ public class InProcessFormDataRepository : IFormDataRepository
     }
 
     // Update an existing form data record by its unique identifier
-    public async Task<FormData?> UpdateAsync(Guid id, FormData form)
+    public async Task<FormData?> UpdateAsync(Guid id, FormData form, Guid expectedVersionKey)
     {
         // Check if the form exists in the ConcurrentDictionary
         if (!_forms.TryGetValue(id, out var existingForm))
@@ -70,7 +71,14 @@ public class InProcessFormDataRepository : IFormDataRepository
             return null; // If not found, return null
         }
 
-        // If found, update the existing FormData record with new values
+        // Reject the write if the record has moved on since the caller last read it
+        if (existingForm.VersionKey != expectedVersionKey)
+        {
+            throw new FormConflictException($"Form '{id}' was modified by another request. Please reload and try again.");
+        }
+
+        // If found, update the existing FormData record with new values, bumping the concurrency token
+        form.VersionKey = Guid.NewGuid();
         _forms[id] = form;
 
         return form;
@@ -79,7 +87,7 @@ public class InProcessFormDataRepository : IFormDataRepository
     // Delete a form data record by its unique identifier
     // Note that this is a soft delete, 
     // meaning the record will be marked as deleted but not removed from storage
-    public async Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> DeleteAsync(Guid id, Guid expectedVersionKey)
     {
         // Check if the form exists in the ConcurrentDictionary
         if (!_forms.TryGetValue(id, out var existingForm))
@@ -90,8 +98,15 @@ public class InProcessFormDataRepository : IFormDataRepository
         // If found, mark the FormData entry as deleted (soft delete)
         if (!existingForm.IsDeleted)
         {
+            // Reject the write if the record has moved on since the caller last read it
+            if (existingForm.VersionKey != expectedVersionKey)
+            {
+                throw new FormConflictException($"Form '{id}' was modified by another request. Please reload and try again.");
+            }
+
             existingForm.IsDeleted = true;
             existingForm.DeletedAt = DateTime.UtcNow;
+            existingForm.VersionKey = Guid.NewGuid();
         }
 
         // Return true to indicate successful deletion

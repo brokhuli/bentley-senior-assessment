@@ -1,4 +1,5 @@
 using FormsApi.Data;
+using FormsApi.Exceptions;
 using FormsApi.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -56,7 +57,7 @@ public class RelationalFormDataRepository : IFormDataRepository
     }
 
     // Update an existing form data entry by its unique identifier
-    public async Task<FormData?> UpdateAsync(Guid id, FormData form)
+    public async Task<FormData?> UpdateAsync(Guid id, FormData form, Guid expectedVersionKey)
     {
         // Check if the form exists in the db
         var existingForm = await _dbContext.Forms.SingleOrDefaultAsync(f => f.Id == id);
@@ -67,7 +68,19 @@ public class RelationalFormDataRepository : IFormDataRepository
 
         // If found, update the existing FormData record with new values
         _dbContext.Entry(existingForm).CurrentValues.SetValues(form);
-        await _dbContext.SaveChangesAsync();
+
+        // Bump the concurrency token, and set the expected version key
+        existingForm.VersionKey = Guid.NewGuid();
+        _dbContext.Entry(existingForm).Property(f => f.VersionKey).OriginalValue = expectedVersionKey;
+
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new FormConflictException($"Form '{id}' was modified by another request. Please reload and try again.");
+        }
 
         return existingForm;
     }
@@ -75,7 +88,7 @@ public class RelationalFormDataRepository : IFormDataRepository
     // Delete a form data entry by its unique identifier
     // Note that this is a soft delete,
     // meaning the entry will be marked as deleted but not removed from storage
-    public async Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> DeleteAsync(Guid id, Guid expectedVersionKey)
     {
         // Check if the form exists in the db
         var existingForm = await _dbContext.Forms.SingleOrDefaultAsync(f => f.Id == id);
@@ -89,7 +102,19 @@ public class RelationalFormDataRepository : IFormDataRepository
         {
             existingForm.IsDeleted = true;
             existingForm.DeletedAt = DateTime.UtcNow;
-            await _dbContext.SaveChangesAsync();
+
+            // Bump the concurrency token, and set the expected version key
+            existingForm.VersionKey = Guid.NewGuid();
+            _dbContext.Entry(existingForm).Property(f => f.VersionKey).OriginalValue = expectedVersionKey;
+
+            try
+            {
+                await _dbContext.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new FormConflictException($"Form '{id}' was modified by another request. Please reload and try again.");
+            }
         }
 
         return true;

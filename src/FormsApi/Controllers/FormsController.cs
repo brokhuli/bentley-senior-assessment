@@ -157,10 +157,10 @@ public class FormsController : ControllerBase
             DeletedAt = existing.DeletedAt
         };
 
-        // Call Update on repository with ID and updated data
-        var formData = await _repository.UpdateAsync(id, updatedFormData);
+        // Call Update on repository with ID, updated data, and concurrency token
+        var formData = await _repository.UpdateAsync(id, updatedFormData, request.VersionKey);
 
-        // If form not found (e.g. deleted concurrently between the checks above and now), throw
+        // If form not found, throw
         if (formData == null)
         {
             _logger.LogWarning("Failed to update form data entry with ID: {FormId} - not found", id);
@@ -215,10 +215,10 @@ public class FormsController : ControllerBase
             DeletedAt = existing.DeletedAt
         };
 
-        // Call Update on repository with ID and updated data
-        var formData = await _repository.UpdateAsync(id, updatedFormData);
+        // Call Update on repository with ID, updated data, and concurrency token
+        var formData = await _repository.UpdateAsync(id, updatedFormData, request.VersionKey);
 
-        // If form not found (e.g. deleted concurrently between the checks above and now), throw
+        // If form not found, throw
         if (formData == null)
         {
             _logger.LogWarning("Failed to patch form data entry with ID: {FormId} - not found", id);
@@ -230,7 +230,7 @@ public class FormsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")] // DELETE /api/forms/{id}
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, [FromQuery] Guid expectedVersionKey)
     {
         // Authorize user for deletion request
         if (!UserCanDelete(User))
@@ -260,8 +260,8 @@ public class FormsController : ControllerBase
             return NoContent();
         }
 
-        // Call Delete on repository with ID
-        bool success = await _repository.DeleteAsync(id);
+        // Call Delete on repository with ID and concurrency token
+        bool success = await _repository.DeleteAsync(id, expectedVersionKey);
 
         // If form not found, throw - handled centrally by ApiExceptionHandler
         if (!success)

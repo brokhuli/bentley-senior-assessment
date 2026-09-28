@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FormsApi.Migrations
 {
     [DbContext(typeof(FormsApiDbContext))]
-    [Migration("20260927174553_InitialCreate")]
+    [Migration("20260928011354_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -59,6 +59,10 @@ namespace FormsApi.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("VersionKey")
+                        .IsConcurrencyToken()
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");

@@ -58,6 +58,10 @@ namespace FormsApi.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("VersionKey")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.ToTable("Forms");

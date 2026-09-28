@@ -22,5 +22,8 @@ public sealed record PatchFormRequest
     [Range(1, 10)]
     int? Priority,
 
-    bool? Critical
+    bool? Critical,
+
+    // added version key as concurrency token
+    Guid VersionKey
 );

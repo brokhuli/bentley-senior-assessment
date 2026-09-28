@@ -38,4 +38,12 @@ public class FormData
     // Added to handle soft deletes
     // Set internally
     public DateTime? DeletedAt { get; set; }
+
+    // Optimistic concurrency token.
+    // Set internally
+    // Updated by the repository on every write.
+    // Clients must round-trip the value they last read back on
+    // update/delete requests so conflicting concurrent writes are rejected.
+    [ConcurrencyCheck]
+    public Guid VersionKey { get; set; } = Guid.NewGuid();
 }

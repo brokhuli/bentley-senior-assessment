@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using FormsApi.Models;
 
 namespace FormsApi.Repositories;
@@ -13,11 +14,13 @@ public interface IFormDataRepository
     // List form data entries with pagination and optional filtering by subject
     Task<(IReadOnlyList<FormData> Items, int TotalCount)> ListAsync(int page, int pageSize, string? subjectFilter);
     
-    // Update an existing form data entry by its unique identifier
-    Task<FormData?> UpdateAsync(Guid id, FormData form);
+    // Update an existing form data entry by its unique identifier.
+    // expectedVersionKey is the VersionKey the caller last read. If it no longer
+    // matches the stored record, a FormConflictException is thrown (optimistic concurrency).
+    Task<FormData?> UpdateAsync(Guid id, FormData form, Guid expectedVersionKey);
 
     // Delete a form data entry by its unique identifier
-    // Note that this is a soft delete, 
+    // Note that this is a soft delete,
     // meaning the entry will be marked as deleted but not removed from storage
-    Task<bool> DeleteAsync(Guid id);
+    Task<bool> DeleteAsync(Guid id, Guid expectedVersionKey);
 }
